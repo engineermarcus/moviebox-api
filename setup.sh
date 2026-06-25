@@ -76,4 +76,4 @@ echo "║               Playwright is ready!                       ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-cd downloader && python3 -m playwright install --with-deps chromium
+cd moviebox-api  && python3 -m playwright install --with-deps chromium
