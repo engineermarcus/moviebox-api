@@ -68,7 +68,7 @@ echo "$DISTRO" > "$HOME/.playwright_distro"
 
 # ── Drop into pw24 ────────────────────────────────────────────────────────────
 echo "[→] Entering $DISTRO..."
-proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard && cd moviebox-api  && python3 -m playwright install --with-deps chromium
+proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard 
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
