@@ -22,7 +22,7 @@ echo "[✓] proot-distro ready"
 # ── Step 2: Ensure pw24 exists ───────────────────────────────────────────────
 echo ""
 echo "[2/4] Setting up $DISTRO..."
-proot-distro install ubuntu --override-alias "$DISTRO" 2>/dev/null || true
+proot-distro install ubuntu:24.04 --override-alias "$DISTRO" || true
 echo "[✓] $DISTRO ready"
 
 # ── Step 3: Python + Playwright + deps ───────────────────────────────────────
@@ -30,9 +30,9 @@ echo ""
 echo "[3/4] Installing Python, Playwright and dependencies..."
 proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard -- bash -c '
     set -e
-    apt update -y -qq &&
+    apt update -y &&
     apt install -y python3 python3-pip &&
-    pip3 install --break-system-packages --quiet playwright &&
+    pip3 install --break-system-packages playwright &&
     python3 -m playwright install chromium &&
     python3 -m playwright install-deps chromium &&
     echo "[✓] All done"
