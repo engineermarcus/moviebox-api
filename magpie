@@ -42,10 +42,11 @@ case "$1" in
         cp "$0" "$HOME/moviebox-api/magpie"
         chmod +x "$HOME/moviebox-api/magpie"
         bash "$HOME/moviebox-api/setup.sh"
-        touch ~/.bashrc
+        touch ~/.bashrc ~/.bash_profile
         grep -q "moviebox-api" ~/.bashrc || echo 'export PATH="$HOME/moviebox-api:$PATH"' >> ~/.bashrc
+        grep -q ".bashrc" ~/.bash_profile || echo 'source ~/.bashrc' >> ~/.bash_profile
+        export PATH="$HOME/moviebox-api:$PATH"
         echo "[✓] magpie added to PATH"
-        exec bash
         ;;
 
     # ── magpie migrate ────────────────────────────────────────────────────────
