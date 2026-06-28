@@ -25,6 +25,11 @@ export async function searchMagpie(q) {
   return res.data;
 }
 
+export async function searchTMDB(query) {
+  const res = await TMDB.get("/search/multi", { params: { query, include_adult: false } });
+  return res.data.results || [];
+}
+
 export async function fetchFiles() {
   const res = await axios.get("/api/files");
   return res.data;

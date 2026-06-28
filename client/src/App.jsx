@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import {
   TMDB, IMG, TMDB_ENDPOINTS,
-  searchMagpie, fetchFiles, startDownloadApi, fetchStreams,
+  searchMagpie, searchTMDB, fetchFiles, startDownloadApi, fetchStreams,
 } from "./lib/api";
 import { useDebounce, useToast } from "./hooks/index";
 
@@ -102,7 +102,7 @@ function Hero({ item, onPlay, onSelect }) {
 
 function SearchResults({ results, query, onPlay, onSelect, downloading }) {
   if (!results.length) return (
-    <div className="empty-state"><div className="empty-state__icon">🔍</div><p>Searching magpie for <strong>"{query}"</strong>…</p></div>
+    <div className="empty-state"><div className="empty-state__icon">🔍</div><p>Searching for <strong>"{query}"</strong>…</p></div>
   );
   return (
     <div className="search-results">
@@ -357,7 +357,28 @@ export default function App() {
 
   useEffect(() => {
     if (!debouncedQuery.trim()) { setSearchResults([]); return; }
-    searchMagpie(debouncedQuery).then(setSearchResults).catch(() => {});
+    searchTMDB(debouncedQuery)
+      .then((items) => setSearchResults(
+        items
+          .filter((item) => item.media_type === "movie" || item.media_type === "tv")
+          .map((item) => {
+            const title = item.title || item.name;
+            const year = (item.release_date || item.first_air_date || "").slice(0, 4);
+            return {
+              detailPath: title,
+              subjectId: item.id,
+              title,
+              cover: IMG(item.poster_path),
+              backdrop: IMG(item.backdrop_path, "w1280"),
+              overview: item.overview,
+              year,
+              rating: item.vote_average?.toFixed(1),
+              mediaType: item.media_type,
+              _fromTMDB: true,
+            };
+          })
+      ))
+      .catch(() => setSearchResults([]));
   }, [debouncedQuery]);
 
   const pollDownloads = () => {
