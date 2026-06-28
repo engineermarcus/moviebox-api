@@ -1,134 +1,82 @@
-# 🐦 Magpie Movie Box
+# Magpie Movie Box
 
-> A headless movie & series downloader for Android (Termux) powered by Playwright and Python. One command installs everything — Ubuntu, Chromium, dependencies — and drops you into a ready shell.
-
----
-
-## ✨ Features
-
-- 🎬 Search and download movies and full TV series
-- 🎯 Smart result scoring — auto picks best match or lets you choose interactively
-- 📺 Season/episode scanning with up to 5 concurrent checks
-- 🔍 Show metadata (genres, rating, IMDB, poster, episode counts) via TVMaze API
-- 📦 Full seasons bundled into a single `.zip` archive automatically
-- ☁️ Optional upload to Internet Archive — deletes local file after upload
-- 🤖 Runs fully headless — no browser UI needed
-- 🐧 Runs on Android via Termux + proot Ubuntu 24.04
-- 🔁 One-line install from anywhere
+A headless movie and series downloader for Android. Runs on Termux via a proot Ubuntu 24.04 container with Playwright and Python. One command sets everything up from scratch.
 
 ---
 
-## 📱 Requirements
-
-- Android device with [Termux](https://f-droid.org/packages/com.termux/) (F-Droid only — not Google Play)
-- Internet connection
-- ~2GB free storage
-
----
-
-## ⚡ Install
-
-On any machine with Termux, run this single command:
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/engineermarcus/moviebox-api/main/magpie -o magpie && chmod +x magpie && bash magpie install
+curl -fsSL https://raw.githubusercontent.com/engineermarcus/moviebox-api/main/magpie -o $PREFIX/bin/magpie && chmod +x $PREFIX/bin/magpie && magpie install
 ```
 
-This will:
-1. Clone the repo into `~/moviebox-api`
-2. Install `proot-distro` if missing
-3. Set up Ubuntu 24.04 container
-4. Install Python, Playwright and Chromium inside Ubuntu
-5. Run a smoke test to confirm Playwright works
-6. Add `magpie` to your PATH permanently
-7. Drop you into the Ubuntu shell — ready to use
+This installs git if missing, clones the repo, sets up Ubuntu 24.04, installs Python, Playwright and Chromium, then registers `magpie` as a global command.
 
 ---
 
-## 🛠️ Usage
+## Commands
 
-> All `magpie --download` commands must be run **inside the Ubuntu container** — run `magpie migrate` first
+### `magpie install`
+Sets up everything from scratch — Ubuntu container, Playwright, dependencies.
 
-### Enter the Ubuntu container
+### `magpie migrate`
+Enter the Ubuntu container where downloads run.
+
+### `magpie start`
+Install Python dependencies inside Ubuntu. Run this once after `magpie migrate`.
+
+### `magpie remove`
+Uninstalls everything — repo, Ubuntu container, global command, PATH entries. Run `hash -r` after to clear the shell cache.
+
+### `magpie --mount <folder>`
+Move downloaded files into `storage/movies` once a download is complete.
+
 ```bash
-magpie migrate
-```
-
-### Install Python dependencies (run once inside Ubuntu)
-```bash
-magpie start
-```
-
-### Mount a folder into storage
-```bash
+# Run this after magpie --download finishes
 magpie --mount downloads
 ```
 
----
+### `magpie --download`
+Search and download a movie or series. Always run inside Ubuntu (`magpie migrate` first).
 
-## 🎬 Downloading
-
-The basic flow is:
-
-1. Search by title — results are listed
-2. Pick a result with `--pickN`
-3. Add season/episode flags as needed
-
-### Search and pick interactively
 ```bash
+# Search — shows numbered results, prompts you to pick
 magpie --download "Breaking Bad"
-# Shows numbered results list, prompts you to pick
-```
 
-### Pick result #1 and download episode
-```bash
+# Pick result #1 and download episode
 magpie --download "Breaking Bad" --pick1 --s1 --ep3
-```
 
-### Pick result #1 and download multiple episodes
-```bash
+# Pick result #1 and download multiple episodes
 magpie --download "The Flash" --pick1 --s1 --ep3 --ep4 --ep5
-```
 
-### Pick result #1 and download a full season
-```bash
-magpie --download "Breaking Bad" --pick1 --s1
-```
+# Pick result #1 and download a full season
+magpie --download "Breaking Bad" --pick1 --s2
 
-### Pick result #1 and download multiple seasons
-```bash
+# Pick result #1 and download multiple seasons
 magpie --download "The Flash" --pick1 --s1 --s2 --s3
-```
 
-### Pick result #1 and download all seasons
-```bash
+# Pick result #1 and download everything
 magpie --download "Breaking Bad" --pick1 -a
-```
 
-### Show info only — no download
-```bash
+# Show metadata only — no download
 magpie --download "Breaking Bad" --pick1 --info
-```
 
-### Print stream URL only — no download
-```bash
+# Print stream URL only — no download
 magpie --download "Inception" --pick1 --url
-```
 
-### Upload to Internet Archive after download
-```bash
+# Upload to Internet Archive after download
 magpie --download "Breaking Bad" --pick1 -a --upload
 ```
 
 ---
 
-## 🚩 All Flags
+## Flags
 
 | Flag | Description |
 |------|-------------|
-| `--pickN` | Pick search result #N without interactive prompt e.g. `--pick1` |
-| `--sN` | Target season N e.g. `--s1` — can stack multiple `--s1 --s2 --s3` |
-| `--epN` | Target episode N e.g. `--ep3` — can stack multiple `--ep3 --ep4` |
+| `--pickN` | Pick search result N without interactive prompt e.g. `--pick1` |
+| `--sN` | Season N e.g. `--s1` — stackable: `--s1 --s2 --s3` |
+| `--epN` | Episode N e.g. `--ep3` — stackable: `--ep3 --ep4 --ep5` |
 | `-a` | Download all seasons |
 | `--info` | Show TVMaze metadata only, no download |
 | `--url` | Print stream URL only, no download |
@@ -137,38 +85,20 @@ magpie --download "Breaking Bad" --pick1 -a --upload
 
 ---
 
-## ⚙️ How It Works
+## How It Works
 
-1. **Search** — Playwright loads moviebox.ph headlessly and extracts results from the page
-2. **Match** — Results are scored by title similarity, resource availability and season match
-3. **Pick** — Auto selects best match or you pick manually with `--pickN`
-4. **Stream** — Playwright loads the player page and intercepts the stream API response
-5. **Download** — `httpx` streams the highest resolution MP4 in 1MB chunks with live progress
-6. **Bundle** — Full seasons are zipped into a single archive, individual files deleted
-7. **Upload** *(optional)* — Files are streamed to Internet Archive in 8MB chunks, deleted locally after
-
----
-
-## 📁 Project Structure
-
-```
-moviebox-api/
-├── magpie           # CLI entrypoint
-├── downloader.py    # Core engine (Playwright + httpx + TVMaze)
-├── setup.sh         # Ubuntu 24.04 + Playwright setup (Termux)
-├── install.sh       # Python dep installer (runs inside Ubuntu)
-├── migrate.sh       # Container login helper
-├── mount.sh         # Storage mount helper
-├── requirements.txt # Python dependencies
-└── storage/
-    └── movies/      # Downloaded content lands here
-```
+1. Playwright loads moviebox.ph headlessly and extracts search results from the page
+2. Results are scored by title match, resource availability and season — best picked automatically
+3. Playwright loads the player page and intercepts the stream API response
+4. The highest resolution stream is selected and downloaded via httpx in 1MB chunks
+5. Full seasons are bundled into a zip archive and individual files deleted
+6. With `--upload`, files stream to Internet Archive in 8MB chunks and are deleted locally after
 
 ---
 
-## ☁️ Internet Archive Upload
+## Internet Archive Upload
 
-Set your credentials in a `.env` file at the project root:
+Add credentials to a `.env` file in the project root:
 
 ```env
 IA_ACCESS_KEY=your_access_key
@@ -177,21 +107,37 @@ IA_SECRET_KEY=your_secret_key
 
 Get free keys at [archive.org/account/s3.php](https://archive.org/account/s3.php)
 
-After upload the local file is deleted automatically to save disk space. The public URL is printed to stdout.
+---
+
+## Project Structure
+
+```
+moviebox-api/
+├── magpie           # CLI
+├── downloader.py    # Core engine
+├── setup.sh         # Ubuntu + Playwright setup
+├── install.sh       # Dep installer (inside Ubuntu)
+├── requirements.txt # Python dependencies
+└── storage/
+    └── movies/      # Downloads land here
+```
 
 ---
 
-## ⚠️ Disclaimer
+## Requirements
 
-This project is intended for personal and educational use only. Respect copyright laws in your jurisdiction. The authors are not responsible for how this tool is used.
-
----
-
-## 📄 License
-
-MIT — free to use, modify and distribute.
+- Android with [Termux](https://f-droid.org/packages/com.termux/) from F-Droid
+- ~2GB free storage
 
 ---
 
-<p align="center">Built with 🐦 by <a href="https://github.com/engineermarcus">engineermarcus</a></p>
+## Disclaimer
+
+For personal and educational use only. Respect copyright laws in your jurisdiction.
+
+---
+
+## License
+
+MIT
 
