@@ -42,8 +42,8 @@ case "$1" in
         bash "$HOME/moviebox-api/setup.sh"
         touch ~/.bashrc
         grep -q "moviebox-api" ~/.bashrc || echo 'export PATH="$HOME/moviebox-api:$PATH"' >> ~/.bashrc
-        source ~/.bashrc
         echo "[✓] magpie added to PATH"
+        exec bash
         ;;
 
     # ── magpie migrate ────────────────────────────────────────────────────────
