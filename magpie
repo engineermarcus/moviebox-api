@@ -19,20 +19,19 @@ usage() {
     echo "  magpie --download \"Movie\" [flags]     Download a movie or series"
     echo ""
     echo "  Download flags:"
-    echo "    --s1          Season 1"
-    echo "    --ep2         Episode 2"
-    echo "    --pick1       Pick result #1"
-    echo "    -a            Download all seasons"
-    echo "    --json        JSON output"
-    echo "    --info        Show info only"
-    echo "    --url         Print stream URL only"
-    echo "    --upload      Upload to Internet Archive"
+    echo "    --pickN         Pick result #N e.g. --pick1"
+    echo "    --sN            Season N e.g. --s1"
+    echo "    --epN           Episode N e.g. --ep3"
+    echo "    -a              Download all seasons"
+    echo "    --info          Show info only"
+    echo "    --url           Print stream URL only"
+    echo "    --json          JSON output"
+    echo "    --upload        Upload to Internet Archive"
     echo ""
 }
 
 case "$1" in
 
-    # ── magpie install ────────────────────────────────────────────────────────
     install)
         command -v git &>/dev/null || pkg install -y git
         if [ ! -d "$HOME/moviebox-api" ]; then
@@ -42,27 +41,22 @@ case "$1" in
         cp "$0" "$HOME/moviebox-api/magpie"
         chmod +x "$HOME/moviebox-api/magpie"
         bash "$HOME/moviebox-api/setup.sh"
-        touch ~/.bashrc ~/.bash_profile
-        grep -q "moviebox-api" ~/.bashrc || echo 'export PATH="$HOME/moviebox-api:$PATH"' >> ~/.bashrc
-        grep -q ".bashrc" ~/.bash_profile || echo 'source ~/.bashrc' >> ~/.bash_profile
-        export PATH="$HOME/moviebox-api:$PATH"
-        echo "[✓] magpie added to PATH"
+        cp "$HOME/moviebox-api/magpie" "$PREFIX/bin/magpie"
+        chmod +x "$PREFIX/bin/magpie"
+        echo "[✓] magpie installed as global command"
         ;;
 
-    # ── magpie migrate ────────────────────────────────────────────────────────
     migrate)
         export DISTRO=pw24
         proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard
         ;;
 
-    # ── magpie start ─────────────────────────────────────────────────────────
     start)
         apt update && apt install zip -y
         pip install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages
         python3 -m playwright install --with-deps chromium
         ;;
 
-    # ── magpie --mount <folder> ───────────────────────────────────────────────
     --mount)
         if [ -z "$2" ]; then
             echo "[✗] Usage: magpie --mount <folder>"
@@ -72,7 +66,6 @@ case "$1" in
         echo "[✓] Mounted $2 → storage/movies"
         ;;
 
-    # ── magpie --download ─────────────────────────────────────────────────────
     --download)
         if [ -z "$2" ]; then
             echo "[✗] Usage: magpie --download \"Movie Title\" [flags]"
@@ -85,7 +78,6 @@ case "$1" in
         }
         ;;
 
-    # ── fallback ──────────────────────────────────────────────────────────────
     *)
         usage
         ;;
