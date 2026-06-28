@@ -38,6 +38,7 @@ case "$1" in
         sed -i '/moviebox-api/d' ~/.bash_profile 2>/dev/null || true
         rm -f "$PREFIX/bin/magpie"
         echo "[ok] magpie removed"
+        echo "[!] Run: hash -r to clear shell cache"
         ;;
 
     migrate)
