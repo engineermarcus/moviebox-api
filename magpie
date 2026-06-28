@@ -34,11 +34,13 @@ case "$1" in
 
     # ── magpie install ────────────────────────────────────────────────────────
     install)
+        command -v git &>/dev/null || pkg install -y git
         if [ ! -d "$HOME/moviebox-api" ]; then
             echo "[→] Cloning moviebox-api..."
             git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
         fi
         bash "$HOME/moviebox-api/setup.sh"
+        touch ~/.bashrc
         grep -q "moviebox-api" ~/.bashrc || echo 'export PATH="$HOME/moviebox-api:$PATH"' >> ~/.bashrc
         source ~/.bashrc
         echo "[✓] magpie added to PATH"
