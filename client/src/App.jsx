@@ -80,15 +80,32 @@ export default function App() {
     }
   };
 
+  const resolveItem = async (item) => {
+    if (item.detailPath && item.subjectId && !item._fromTMDB) return item;
+    showToast("Searching magpie for " + item.title + "...", "info");
+    const res = await axios.get(`/api/search?q=${encodeURIComponent(item.title)}`);
+    const results = res.data;
+    if (!results?.length) { showToast("Not found on magpie", "error"); return null; }
+    return results[0];
+  };
+
   const playStream = async (item, season = 1, episode = 1) => {
     try {
-      const res = await axios.get(`/api/streams?detailPath=${item.detailPath}&subjectId=${item.subjectId}&season=${season}&episode=${episode}`);
+      const resolved = await resolveItem(item);
+      if (!resolved) return;
+      const res = await axios.get(`/api/streams?detailPath=${resolved.detailPath}&subjectId=${resolved.subjectId}&season=${season}&episode=${episode}`);
       const streams = res.data;
       if (!streams?.length) { showToast("No streams found", "error"); return; }
       const best = streams.reduce((a, b) => parseInt(a.resolutions) > parseInt(b.resolutions) ? a : b);
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(best.url)}&referer=${encodeURIComponent("https://moviebox.ph/")}`;
-      setPlayer({ url: proxyUrl, title: item.title, season, episode });
+      setPlayer({ url: proxyUrl, title: resolved.title, season, episode });
     } catch { showToast("Could not load stream", "error"); }
+  };
+
+  const startDownloadResolved = async (item, season, episode) => {
+    const resolved = await resolveItem(item);
+    if (!resolved) return;
+    startDownload(resolved, season, episode);
   };
 
   const activeSearch = debouncedQuery.trim().length > 0;
@@ -127,11 +144,11 @@ export default function App() {
             <h1 style={{ fontSize: 44, fontWeight: 900, margin: "0 0 12px", lineHeight: 1.1 }}>{hero.title || hero.name}</h1>
             <p style={{ fontSize: 15, color: "#ccc", lineHeight: 1.6, marginBottom: 24 }}>{(hero.overview || "").slice(0, 180)}...</p>
             <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => playStream({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name })}
+              <button onClick={() => playStream({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name, _fromTMDB: true })}
                 style={{ background: "#e50914", border: "none", color: "#fff", padding: "12px 28px", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
                 ▶ Watch Now
               </button>
-              <button onClick={() => setSelected({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name, cover: IMG(hero.poster_path) })}
+              <button onClick={() => setSelected({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name, cover: IMG(hero.poster_path), _fromTMDB: true })}
                 style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "12px 28px", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
                 + Download
               </button>
@@ -209,7 +226,7 @@ export default function App() {
       {/* Download Modal */}
       {selected && (
         <Modal title={selected.title} cover={selected.cover} onClose={() => setSelected(null)}>
-          <DownloadForm item={selected} onDownload={(s, e) => { startDownload(selected, s, e); setSelected(null); }} onPlay={(s, e) => { playStream(selected, s, e); setSelected(null); }} />
+          <DownloadForm item={selected} onDownload={(s, e) => { startDownloadResolved(selected, s, e); setSelected(null); }} onPlay={(s, e) => { playStream(selected, s, e); setSelected(null); }} />
         </Modal>
       )}
 
@@ -254,9 +271,9 @@ function TMDBCard({ item, onSelect, onPlay }) {
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 13, textAlign: "center", marginBottom: 4 }}>{title}</div>
           <div style={{ fontSize: 11, color: "#aaa" }}>{year} · ⭐ {item.vote_average?.toFixed(1)}</div>
-          <button onClick={() => onPlay({ detailPath: title, subjectId: item.id, title })}
+          <button onClick={() => onPlay({ detailPath: title, subjectId: item.id, title, _fromTMDB: true })}
             style={{ background: "#e50914", border: "none", color: "#fff", padding: "7px 18px", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", width: "100%" }}>▶ Watch</button>
-          <button onClick={() => onSelect({ detailPath: title, subjectId: item.id, title, cover: IMG(item.poster_path) })}
+          <button onClick={() => onSelect({ detailPath: title, subjectId: item.id, title, cover: IMG(item.poster_path), _fromTMDB: true })}
             style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "7px 18px", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", width: "100%" }}>⬇ Download</button>
         </div>
       )}
