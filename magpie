@@ -19,36 +19,65 @@ usage() {
 case "$1" in
 
     install)
-        command -v git &>/dev/null || pkg install -y git
-        if [ ! -d "$HOME/moviebox-api" ]; then
-            echo "[->] Cloning moviebox-api..."
-            git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
+        if [ -n "$PREFIX" ] && [ -d "/data/data/com.termux" ]; then
+            # Termux
+            command -v git &>/dev/null || pkg install -y git
+            if [ ! -d "$HOME/moviebox-api" ]; then
+                echo "[->] Cloning moviebox-api..."
+                git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
+            fi
+            bash "$HOME/moviebox-api/setup.sh"
+            cp "$HOME/moviebox-api/magpie" "$PREFIX/bin/magpie"
+            chmod +x "$PREFIX/bin/magpie"
+        else
+            # Linux (Debian/Ubuntu)
+            echo "[->] Installing dependencies..."
+            sudo apt update -y
+            sudo apt install -y python3 python3-pip git zip
+            if [ ! -d "$HOME/moviebox-api" ]; then
+                echo "[->] Cloning moviebox-api..."
+                git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
+            fi
+            cd "$HOME/moviebox-api"
+            pip3 install -r requirements.txt --break-system-packages
+            python3 -m playwright install --with-deps chromium
+            sudo cp "$HOME/moviebox-api/magpie" /usr/local/bin/magpie
+            sudo chmod +x /usr/local/bin/magpie
         fi
-        bash "$HOME/moviebox-api/setup.sh"
-        cp "$HOME/moviebox-api/magpie" "$PREFIX/bin/magpie"
-        chmod +x "$PREFIX/bin/magpie"
         echo "[ok] magpie installed as global command"
         ;;
 
     remove)
         echo "[->] Removing magpie..."
         rm -rf "$HOME/moviebox-api"
-        proot-distro remove pw24 2>/dev/null || true
         sed -i '/moviebox-api/d' ~/.bashrc 2>/dev/null || true
         sed -i '/moviebox-api/d' ~/.bash_profile 2>/dev/null || true
-        rm -f "$PREFIX/bin/magpie"
+        if [ -n "$PREFIX" ] && [ -d "/data/data/com.termux" ]; then
+            proot-distro remove pw24 2>/dev/null || true
+            rm -f "$PREFIX/bin/magpie"
+        else
+            sudo rm -f /usr/local/bin/magpie
+        fi
         echo "[ok] magpie removed"
         echo "[!] Run: hash -r to clear shell cache"
         ;;
 
     migrate)
-        proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard
+        if [ -n "$PREFIX" ] && [ -d "/data/data/com.termux" ]; then
+            proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard
+        else
+            echo "[!] migrate is only needed on Termux. On Linux you are already in the right environment."
+        fi
         ;;
 
     start)
-        apt update && apt install zip -y
-        pip install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages
-        python3 -m playwright install --with-deps chromium
+        if [ -n "$PREFIX" ] && [ -d "/data/data/com.termux" ]; then
+            apt update && apt install zip -y
+            pip install -r "$SCRIPT_DIR/requirements.txt" --break-system-packages
+            python3 -m playwright install --with-deps chromium
+        else
+            echo "[!] On Linux, deps are installed during magpie install. Nothing to do."
+        fi
         ;;
 
     --mount)
