@@ -32,9 +32,11 @@ case "$1" in
 
     remove)
         echo "[->] Removing magpie..."
-        rm -f "$PREFIX/bin/magpie"
         rm -rf "$HOME/moviebox-api"
         proot-distro remove pw24 2>/dev/null || true
+        sed -i '/moviebox-api/d' ~/.bashrc 2>/dev/null || true
+        sed -i '/moviebox-api/d' ~/.bash_profile 2>/dev/null || true
+        rm -f "$PREFIX/bin/magpie"
         echo "[ok] magpie removed"
         ;;
 
