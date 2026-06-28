@@ -39,6 +39,8 @@ case "$1" in
             echo "[→] Cloning moviebox-api..."
             git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
         fi
+        cp "$0" "$HOME/moviebox-api/magpie"
+        chmod +x "$HOME/moviebox-api/magpie"
         bash "$HOME/moviebox-api/setup.sh"
         touch ~/.bashrc
         grep -q "moviebox-api" ~/.bashrc || echo 'export PATH="$HOME/moviebox-api:$PATH"' >> ~/.bashrc
