@@ -610,8 +610,16 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import threading
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)
+
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
+
+@app.route("/<path:path>")
+def static_files(path):
+    return app.send_static_file(path)
 
 def run_async(coro):
     loop = asyncio.new_event_loop()
