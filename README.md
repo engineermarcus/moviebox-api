@@ -51,6 +51,39 @@ This installs all Python packages and Playwright browser dependencies.
 
 ---
 
+## Linux (Debian / Ubuntu)
+
+On Linux there is no container setup — magpie installs everything directly on your system.
+
+### Step 1 — Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/engineermarcus/moviebox-api/main/magpie -o magpie && chmod +x magpie && sudo mv magpie /usr/local/bin/magpie && magpie install
+```
+
+This will:
+- Install Python, pip, git and zip via apt
+- Clone the repo
+- Install all Python dependencies
+- Install Playwright and Chromium
+- Register `magpie` as a global command
+
+### Step 2 — Download
+
+You are already in the right environment — no container to enter. Go straight to downloading:
+
+```bash
+magpie --download "Breaking Bad" --pick1 --s1 --ep1
+```
+
+### Step 3 — Uninstall
+
+```bash
+magpie remove
+```
+
+---
+
 ## Downloading
 
 ### Basic search
