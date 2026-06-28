@@ -1,32 +1,16 @@
 #!/bin/bash
-# ─────────────────────────────────────────────────────────────────────────────
-# magpie — MovieBox CLI
-# ─────────────────────────────────────────────────────────────────────────────
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$HOME/moviebox-api"
 DISTRO="pw24"
 
 usage() {
     echo ""
-    echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║                  magpie — MovieBox CLI                   ║"
-    echo "╚══════════════════════════════════════════════════════════╝"
+    echo "  magpie install                    Setup proot + Ubuntu + Playwright"
+    echo "  magpie migrate                    Enter the Ubuntu container"
+    echo "  magpie start                      Install Python deps inside Ubuntu"
+    echo "  magpie --mount <folder>           Move folder into storage/movies"
+    echo "  magpie --download Title [flags]   Download a movie or series"
     echo ""
-    echo "  magpie install                        Setup proot + Ubuntu + Playwright"
-    echo "  magpie migrate                        Enter the Ubuntu container"
-    echo "  magpie start                          Install Python deps inside Ubuntu"
-    echo "  magpie --mount <folder>               Move folder into storage/movies"
-    echo "  magpie --download \"Movie\" [flags]     Download a movie or series"
-    echo ""
-    echo "  Download flags:"
-    echo "    --pickN         Pick result #N e.g. --pick1"
-    echo "    --sN            Season N e.g. --s1"
-    echo "    --epN           Episode N e.g. --ep3"
-    echo "    -a              Download all seasons"
-    echo "    --info          Show info only"
-    echo "    --url           Print stream URL only"
-    echo "    --json          JSON output"
-    echo "    --upload        Upload to Internet Archive"
+    echo "  Flags: --pickN --sN --epN -a --info --url --json --upload"
     echo ""
 }
 
@@ -35,19 +19,16 @@ case "$1" in
     install)
         command -v git &>/dev/null || pkg install -y git
         if [ ! -d "$HOME/moviebox-api" ]; then
-            echo "[→] Cloning moviebox-api..."
+            echo "[->] Cloning moviebox-api..."
             git clone https://github.com/engineermarcus/moviebox-api.git "$HOME/moviebox-api"
         fi
-        cp "$0" "$HOME/moviebox-api/magpie"
-        chmod +x "$HOME/moviebox-api/magpie"
         bash "$HOME/moviebox-api/setup.sh"
         cp "$HOME/moviebox-api/magpie" "$PREFIX/bin/magpie"
         chmod +x "$PREFIX/bin/magpie"
-        echo "[✓] magpie installed as global command"
+        echo "[ok] magpie installed as global command"
         ;;
 
     migrate)
-        export DISTRO=pw24
         proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard
         ;;
 
@@ -59,22 +40,21 @@ case "$1" in
 
     --mount)
         if [ -z "$2" ]; then
-            echo "[✗] Usage: magpie --mount <folder>"
+            echo "[x] Usage: magpie --mount <folder>"
             exit 1
         fi
-        mv -f "$2" "$SCRIPT_DIR/../storage/movies"
-        echo "[✓] Mounted $2 → storage/movies"
+        mv -f "$2" "$SCRIPT_DIR/storage/movies"
+        echo "[ok] Mounted $2 -> storage/movies"
         ;;
 
     --download)
         if [ -z "$2" ]; then
-            echo "[✗] Usage: magpie --download \"Movie Title\" [flags]"
+            echo "[x] Usage: magpie --download Title [flags]"
             exit 1
         fi
         shift
         python3 "$SCRIPT_DIR/downloader.py" "$@" 2>&1 || {
-            echo ""
-            echo "[!] Something went wrong. If deps are missing, run: magpie start"
+            echo "[!] Something went wrong. Run: magpie start"
         }
         ;;
 
