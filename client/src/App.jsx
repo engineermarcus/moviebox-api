@@ -245,7 +245,18 @@ function VideoPlayer({ player, onClose }) {
   };
   return (
     <div className="player" onMouseMove={resetHide} onClick={togglePlay}>
-      <video ref={videoRef} src={player.url} autoPlay className="player__video" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onTimeUpdate} />
+      <video
+        ref={videoRef}
+        src={player.url}
+        autoPlay
+        playsInline
+        controls={false}
+        disablePictureInPicture
+        controlsList="nodownload noremoteplayback nofullscreen"
+        className="player__video"
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onTimeUpdate}
+      />
       <div className={`player__controls ${showControls ? "player__controls--visible" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="player__top">
           <button className="player__close" onClick={onClose}><Icon.Close /></button>
