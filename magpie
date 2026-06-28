@@ -7,7 +7,6 @@ usage() {
     echo "  magpie install                    Setup proot + Ubuntu + Playwright"
     echo "  magpie migrate                    Enter the Ubuntu container"
     echo "  magpie start                      Install Python deps inside Ubuntu"
-    echo "  magpie --mount <folder>           Move folder into storage/movies"
     echo "  magpie --download Title [flags]   Download a movie or series"
     echo ""
     echo "  magpie remove                     Uninstall magpie and clean everything"
@@ -78,15 +77,6 @@ case "$1" in
         else
             echo "[!] On Linux, deps are installed during magpie install. Nothing to do."
         fi
-        ;;
-
-    --mount)
-        if [ -z "$2" ]; then
-            echo "[x] Usage: magpie --mount <folder>"
-            exit 1
-        fi
-        mv -f "$2" "$SCRIPT_DIR/storage/movies"
-        echo "[ok] Mounted $2 -> storage/movies"
         ;;
 
     --download)

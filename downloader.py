@@ -42,7 +42,7 @@ async def tvmaze_info(title: str) -> dict:
         return {}
 
 # ── Downloads folder ────────────────────────────────────────────────────────
-DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "movies", "magpie")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 # ── Player URL template ───────────────────────────────────────────────────────
