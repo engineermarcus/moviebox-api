@@ -68,6 +68,4 @@ fi
 
 echo "$DISTRO" > "$HOME/.playwright_distro"
 
-# ── Drop into pw24 ────────────────────────────────────────────────────────────
-echo "[→] Entering $DISTRO..."
-proot-distro login "$DISTRO" --bind "$HOME:/root" --bind /sdcard:/sdcard
+
