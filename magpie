@@ -8,6 +8,7 @@ usage() {
     echo "  magpie migrate                    Enter the Ubuntu container"
     echo "  magpie start                      Install Python deps inside Ubuntu"
     echo "  magpie --download Title [flags]   Download a movie or series"
+    echo "  magpie serve                      Start the web interface on port 5000"
     echo ""
     echo "  magpie remove                     Uninstall magpie and clean everything"
     echo ""
@@ -77,6 +78,10 @@ case "$1" in
         else
             echo "[!] On Linux, deps are installed during magpie install. Nothing to do."
         fi
+        ;;
+
+    serve)
+        python3 "$SCRIPT_DIR/downloader.py" --server
         ;;
 
     --download)
