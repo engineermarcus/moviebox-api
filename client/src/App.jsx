@@ -1,90 +1,364 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
+import {
+  TMDB, IMG, TMDB_ENDPOINTS,
+  searchMagpie, fetchFiles, startDownloadApi, fetchStreams,
+} from "./lib/api";
+import { useDebounce, useToast } from "./hooks/index";
 
-const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhNWU0MGMwODlmOTA0NDU3MWRjZDVjOThiMjBiZmFlMSIsIm5iZiI6MTc3ODcwOTk4Mi40ODcsInN1YiI6IjZhMDRmNWRlNTc0OWJmZmZlMTZmY2FkNCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.lN33o5iU2l0cBkF7MOfpDPd0XO6QgDxhYT8dtF8H39A";
-const TMDB = axios.create({ baseURL: "https://api.themoviedb.org/3", headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
-const IMG = (p, s = "w500") => p ? `https://image.tmdb.org/t/p/${s}${p}` : null;
+const CATEGORIES = ["Trending", "Movies", "TV Shows", "Crime", "Drama", "Thriller"];
 
-const TABS = ["Trending", "Movies", "TV Shows", "Crime", "Drama", "Thriller", "Downloads"];
+const Icon = {
+  Home: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>),
+  Search: () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>),
+  Download: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>),
+  List: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>),
+  Play: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M8 5v14l11-7z"/></svg>),
+  Plus: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>),
+  Info: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>),
+  Close: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>),
+  ChevronLeft: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>),
+  ChevronRight: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>),
+  Star: () => (<svg viewBox="0 0 24 24" fill="#f5c518" width="13" height="13"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>),
+  Volume: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>),
+  Fullscreen: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>),
+  Pause: () => (<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>),
+};
 
-function useDebounce(value, delay) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => { const t = setTimeout(() => setDebounced(value), delay); return () => clearTimeout(t); }, [value, delay]);
-  return debounced;
+function Carousel({ title, items, onSelect, onPlay }) {
+  const rowRef = useRef(null);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(true);
+  const scroll = (dir) => rowRef.current?.scrollBy({ left: dir * 600, behavior: "smooth" });
+  const onScroll = () => {
+    const el = rowRef.current;
+    if (!el) return;
+    setShowLeft(el.scrollLeft > 10);
+    setShowRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+  if (!items?.length) return null;
+  return (
+    <div className="carousel-section">
+      <h2 className="carousel-title">{title}</h2>
+      <div className="carousel-wrapper">
+        {showLeft && <button className="carousel-btn carousel-btn-left" onClick={() => scroll(-1)}><Icon.ChevronLeft /></button>}
+        <div className="carousel-row" ref={rowRef} onScroll={onScroll}>
+          {items.map((item, i) => <MediaCard key={i} item={item} onSelect={onSelect} onPlay={onPlay} />)}
+        </div>
+        {showRight && <button className="carousel-btn carousel-btn-right" onClick={() => scroll(1)}><Icon.ChevronRight /></button>}
+      </div>
+    </div>
+  );
+}
+
+function MediaCard({ item, onSelect, onPlay }) {
+  const [hover, setHover] = useState(false);
+  const title = item.title || item.name;
+  const year = (item.release_date || item.first_air_date || "").slice(0, 4);
+  const poster = IMG(item.poster_path);
+  const rating = item.vote_average?.toFixed(1);
+  const payload = { detailPath: title, subjectId: item.id, title, cover: IMG(item.poster_path), backdrop: IMG(item.backdrop_path, "w1280"), overview: item.overview, year, rating, mediaType: item.media_type || (item.first_air_date ? "tv" : "movie"), _fromTMDB: true };
+  return (
+    <div className={`media-card ${hover ? "media-card--hover" : ""}`} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onClick={() => onSelect(payload)}>
+      {poster ? <img src={poster} alt={title} className="media-card__poster" loading="lazy" /> : <div className="media-card__placeholder">🎬</div>}
+      <div className="media-card__overlay">
+        <div className="media-card__meta">
+          <span className="media-card__title">{title}</span>
+          <span className="media-card__sub"><Icon.Star /> {rating} · {year}</span>
+        </div>
+        <div className="media-card__actions">
+          <button className="btn-play-sm" onClick={(e) => { e.stopPropagation(); onPlay({ detailPath: title, subjectId: item.id, title, _fromTMDB: true }); }}><Icon.Play /> Watch</button>
+          <button className="btn-dl-sm" onClick={(e) => { e.stopPropagation(); onSelect(payload); }}><Icon.Plus /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Hero({ item, onPlay, onSelect }) {
+  const [loaded, setLoaded] = useState(false);
+  if (!item) return <div className="hero hero--skeleton" />;
+  const title = item.title || item.name;
+  const year = (item.release_date || item.first_air_date || "").slice(0, 4);
+  const backdrop = IMG(item.backdrop_path, "original");
+  const type = item.media_type === "tv" || item.first_air_date ? "Series" : "Film";
+  return (
+    <div className="hero">
+      {backdrop && <img src={backdrop} alt="" className={`hero__bg ${loaded ? "hero__bg--loaded" : ""}`} onLoad={() => setLoaded(true)} />}
+      <div className="hero__scrim" />
+      <div className="hero__content">
+        <span className="hero__badge">{type} · {year}</span>
+        <h1 className="hero__title">{title}</h1>
+        <p className="hero__overview">{(item.overview || "").slice(0, 220)}{item.overview?.length > 220 ? "…" : ""}</p>
+        <div className="hero__rating"><Icon.Star /><Icon.Star /><Icon.Star /><Icon.Star /><Icon.Star /><span>{item.vote_average?.toFixed(1)} / 10</span></div>
+        <div className="hero__btns">
+          <button className="btn-hero-play" onClick={() => onPlay({ detailPath: title, subjectId: item.id, title, _fromTMDB: true })}><Icon.Play /> Play Now</button>
+          <button className="btn-hero-info" onClick={() => onSelect({ detailPath: title, subjectId: item.id, title, cover: IMG(item.poster_path), backdrop: IMG(item.backdrop_path, "w1280"), overview: item.overview, year, mediaType: item.media_type || (item.first_air_date ? "tv" : "movie"), _fromTMDB: true })}><Icon.Info /> More Info</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchResults({ results, query, onPlay, onSelect, downloading }) {
+  if (!results.length) return (
+    <div className="empty-state"><div className="empty-state__icon">🔍</div><p>Searching magpie for <strong>"{query}"</strong>…</p></div>
+  );
+  return (
+    <div className="search-results">
+      <h2 className="search-results__heading">Results for <span>"{query}"</span></h2>
+      <div className="search-grid">
+        {results.map((item, i) => {
+          const key = `${item.detailPath}-s1e1`;
+          const status = downloading[key];
+          return (
+            <div key={i} className="search-card" onClick={() => onSelect(item)}>
+              {item.cover ? <img src={item.cover} alt={item.title} className="search-card__img" loading="lazy" /> : <div className="search-card__img search-card__img--placeholder">🎬</div>}
+              <div className="search-card__body">
+                <h3 className="search-card__title">{item.title}</h3>
+                <div className="search-card__meta">
+                  {item.year && <span className="badge">{item.year}</span>}
+                  {item.genre && <span className="badge badge--genre">{item.genre}</span>}
+                  {item.hasResource && <span className="badge badge--avail">Available</span>}
+                </div>
+                <div className="search-card__actions">
+                  <button className="btn-play-sm" onClick={(e) => { e.stopPropagation(); onPlay(item); }}><Icon.Play /> Watch</button>
+                  <button className="btn-dl-sm btn-dl-sm--labeled" onClick={(e) => { e.stopPropagation(); onSelect(item); }}>
+                    {status?.status === "done" ? "✓ Done" : status?.status === "starting" ? "…" : <><Icon.Download /> Save</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Downloads({ files, onPlay }) {
+  return (
+    <div className="downloads">
+      <h2 className="section-heading">My Downloads</h2>
+      {!files.length ? (
+        <div className="empty-state"><div className="empty-state__icon">📂</div><p>No downloads yet. Search for something to get started.</p></div>
+      ) : (
+        <div className="downloads-grid">
+          {files.map((f, i) => (
+            <div key={i} className="dl-card">
+              <div className="dl-card__icon">🎬</div>
+              <div className="dl-card__info">
+                <span className="dl-card__name">{f.name}</span>
+                <span className="dl-card__size">{f.size_mb} MB</span>
+                {f.progress !== undefined && f.progress < 100 && (
+                  <div className="dl-card__progress-bar"><div className="dl-card__progress-fill" style={{ width: `${f.progress}%` }} /></div>
+                )}
+              </div>
+              <button className="btn-play-sm" onClick={() => onPlay({ url: `/api/files/${f.name}`, title: f.name })}><Icon.Play /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailModal({ item, onClose, onPlay, onDownload }) {
+  const [season, setSeason] = useState(1);
+  const [episode, setEpisode] = useState(1);
+  const isTV = item.mediaType === "tv";
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
+        {item.backdrop && <div className="detail-modal__backdrop"><img src={item.backdrop} alt="" /><div className="detail-modal__backdrop-scrim" /></div>}
+        <button className="detail-modal__close" onClick={onClose}><Icon.Close /></button>
+        <div className="detail-modal__body">
+          <div className="detail-modal__left">{item.cover && <img src={item.cover} alt={item.title} className="detail-modal__poster" />}</div>
+          <div className="detail-modal__right">
+            <h2 className="detail-modal__title">{item.title}</h2>
+            {item.year && <span className="badge" style={{ marginBottom: 12, display: "inline-block" }}>{item.year}</span>}
+            {item.rating && <div className="detail-modal__rating"><Icon.Star /> {item.rating} / 10</div>}
+            {item.overview && <p className="detail-modal__overview">{item.overview}</p>}
+            {isTV && (
+              <div className="detail-modal__episode-row">
+                <div className="detail-modal__field"><label>Season</label><input type="number" min={1} value={season} onChange={(e) => setSeason(parseInt(e.target.value) || 1)} /></div>
+                <div className="detail-modal__field"><label>Episode</label><input type="number" min={1} value={episode} onChange={(e) => setEpisode(parseInt(e.target.value) || 1)} /></div>
+              </div>
+            )}
+            <div className="detail-modal__actions">
+              <button className="btn-hero-play" onClick={() => { onPlay(item, season, episode); onClose(); }}><Icon.Play /> Watch Now</button>
+              <button className="btn-hero-info" onClick={() => { onDownload(item, season, episode); onClose(); }}><Icon.Download /> Download</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VideoPlayer({ player, onClose }) {
+  const videoRef = useRef(null);
+  const [playing, setPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [showControls, setShowControls] = useState(true);
+  const hideTimer = useRef(null);
+  const resetHide = useCallback(() => {
+    setShowControls(true);
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowControls(false), 3000);
+  }, []);
+  useEffect(() => { resetHide(); return () => clearTimeout(hideTimer.current); }, [resetHide]);
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); }
+  };
+  const onTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setProgress(v.currentTime);
+    setDuration(v.duration || 0);
+  };
+  const seek = (e) => {
+    const v = videoRef.current;
+    if (!v || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    v.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  };
+  const setVol = (e) => {
+    const v = videoRef.current;
+    const val = parseFloat(e.target.value);
+    if (v) v.volume = val;
+    setVolume(val);
+  };
+  const fmt = (s) => {
+    if (!s || isNaN(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+  const fullscreen = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+  return (
+    <div className="player" onMouseMove={resetHide} onClick={togglePlay}>
+      <video ref={videoRef} src={player.url} autoPlay className="player__video" onTimeUpdate={onTimeUpdate} onLoadedMetadata={onTimeUpdate} />
+      <div className={`player__controls ${showControls ? "player__controls--visible" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="player__top">
+          <button className="player__close" onClick={onClose}><Icon.Close /></button>
+          <span className="player__title">{player.title}{player.season && <span className="player__episode"> · S{player.season}E{player.episode}</span>}</span>
+        </div>
+        <div className="player__progress-area">
+          <span className="player__time">{fmt(progress)}</span>
+          <div className="player__seek" onClick={seek}>
+            <div className="player__seek-filled" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
+          </div>
+          <span className="player__time">{fmt(duration)}</span>
+        </div>
+        <div className="player__bottom">
+          <button className="player__btn" onClick={togglePlay}>{playing ? <Icon.Pause /> : <Icon.Play />}</button>
+          <div className="player__volume"><Icon.Volume /><input type="range" min={0} max={1} step={0.05} value={volume} onChange={setVol} className="player__volume-slider" /></div>
+          <button className="player__btn player__btn--right" onClick={fullscreen}><Icon.Fullscreen /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  const colors = { error: "#e50914", success: "#46d369", info: "#1a1a2e" };
+  return <div className="toast" style={{ background: colors[toast.type] || colors.info }}>{toast.msg}</div>;
+}
+
+function BottomNav({ active, onChange }) {
+  const tabs = [
+    { id: "home", label: "Home", I: Icon.Home },
+    { id: "search", label: "Search", I: Icon.Search },
+    { id: "downloads", label: "Downloads", I: Icon.Download },
+    { id: "mylist", label: "My List", I: Icon.List },
+  ];
+  return (
+    <nav className="bottom-nav">
+      {tabs.map(({ id, label, I }) => (
+        <button key={id} className={`bottom-nav__item ${active === id ? "bottom-nav__item--active" : ""}`} onClick={() => onChange(id)}>
+          <I /><span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function TopNav({ activeTab, onTabChange, query, onQuery }) {
+  return (
+    <nav className="top-nav">
+      <div className="top-nav__logo"><span className="top-nav__logo-icon">🐦</span>MAGPIE</div>
+      <div className="top-nav__tabs">
+        {["Home", ...CATEGORIES, "Downloads"].map((t) => (
+          <button key={t} className={`top-nav__tab ${activeTab === t ? "top-nav__tab--active" : ""}`} onClick={() => onTabChange(t)}>{t}</button>
+        ))}
+      </div>
+      <div className="top-nav__search">
+        <Icon.Search />
+        <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search titles…" className="top-nav__search-input" />
+        {query && <button className="top-nav__search-clear" onClick={() => onQuery("")}><Icon.Close /></button>}
+      </div>
+    </nav>
+  );
 }
 
 export default function App() {
-  const [tab, setTab] = useState("Trending");
-  const [items, setItems] = useState([]);
+  const [activeTab, setActiveTab] = useState("Home");
+  const [mobileTab, setMobileTab] = useState("home");
+  const [categories, setCategories] = useState({});
   const [hero, setHero] = useState(null);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [player, setPlayer] = useState(null);
   const [downloads, setDownloads] = useState([]);
   const [downloading, setDownloading] = useState({});
-  const [player, setPlayer] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(null);
-  const debouncedQuery = useDebounce(query, 500);
+  const [myList, setMyList] = useState(() => { try { return JSON.parse(localStorage.getItem("magpie_mylist") || "[]"); } catch { return []; } });
+  const { toast, showToast } = useToast();
+  const debouncedQuery = useDebounce(query, 450);
   const pollRef = useRef(null);
 
-  const showToast = (msg, type = "info") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+  const isSearching = debouncedQuery.trim().length > 0 || (query.trim().length > 0 && mobileTab === "search");
+  const showDownloads = activeTab === "Downloads" || mobileTab === "downloads";
+  const showMyList = mobileTab === "mylist";
 
-  // Fetch TMDB content by tab
   useEffect(() => {
-    if (tab === "Downloads") { fetchDownloads(); return; }
-    setLoading(true);
-    const endpoints = {
-      Trending: "/trending/all/week",
-      Movies: "/movie/popular",
-      "TV Shows": "/tv/popular",
-      Crime: "/discover/movie?with_genres=80&sort_by=popularity.desc",
-      Drama: "/discover/movie?with_genres=18&sort_by=popularity.desc",
-      Thriller: "/discover/movie?with_genres=53&sort_by=popularity.desc",
+    const load = async () => {
+      const cats = {};
+      await Promise.all(Object.entries(TMDB_ENDPOINTS).map(async ([key, endpoint]) => {
+        try { const r = await TMDB.get(endpoint); cats[key] = r.data.results || []; } catch {}
+      }));
+      setCategories(cats);
+      const trending = cats["Trending"] || [];
+      if (trending.length) setHero(trending[Math.floor(Math.random() * Math.min(5, trending.length))]);
     };
-    TMDB.get(endpoints[tab]).then(r => {
-      const results = r.data.results || [];
-      setItems(results);
-      setHero(results[Math.floor(Math.random() * Math.min(5, results.length))]);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [tab]);
+    load();
+    fetchFiles().then(setDownloads).catch(() => {});
+  }, []);
 
-  // Search magpie API
   useEffect(() => {
     if (!debouncedQuery.trim()) { setSearchResults([]); return; }
-    axios.get(`/api/search?q=${encodeURIComponent(debouncedQuery)}`).then(r => setSearchResults(r.data)).catch(() => {});
+    searchMagpie(debouncedQuery).then(setSearchResults).catch(() => {});
   }, [debouncedQuery]);
 
-  const fetchDownloads = () => {
-    axios.get("/api/files").then(r => setDownloads(r.data)).catch(() => {});
-  };
-
-  const startDownload = async (item, season = 1, episode = 1) => {
-    const key = `${item.detailPath}-s${season}e${episode}`;
-    setDownloading(d => ({ ...d, [key]: { progress: 0, status: "starting" } }));
-    try {
-      const res = await axios.post("/api/download", {
-        detailPath: item.detailPath,
-        subjectId: item.subjectId,
-        title: item.title,
-        season, episode
-      });
-      setDownloading(d => ({ ...d, [key]: { progress: 100, status: "done", url: res.data.url } }));
-      showToast(`Download started: ${item.title}`, "success");
-      pollRef.current = setInterval(fetchDownloads, 3000);
-      setTimeout(() => clearInterval(pollRef.current), 60000);
-    } catch {
-      setDownloading(d => ({ ...d, [key]: { status: "error" } }));
-      showToast("Download failed", "error");
-    }
+  const pollDownloads = () => {
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => fetchFiles().then(setDownloads), 3000);
+    setTimeout(() => clearInterval(pollRef.current), 90000);
   };
 
   const resolveItem = async (item) => {
     if (item.detailPath && item.subjectId && !item._fromTMDB) return item;
-    showToast("Searching magpie for " + item.title + "...", "info");
-    const res = await axios.get(`/api/search?q=${encodeURIComponent(item.title)}`);
-    const results = res.data;
+    showToast(`Finding "${item.title}" on magpie…`, "info");
+    const results = await searchMagpie(item.title);
     if (!results?.length) { showToast("Not found on magpie", "error"); return null; }
     return results[0];
   };
@@ -93,8 +367,7 @@ export default function App() {
     try {
       const resolved = await resolveItem(item);
       if (!resolved) return;
-      const res = await axios.get(`/api/streams?detailPath=${resolved.detailPath}&subjectId=${resolved.subjectId}&season=${season}&episode=${episode}`);
-      const streams = res.data;
+      const streams = await fetchStreams(resolved.detailPath, resolved.subjectId, season, episode);
       if (!streams?.length) { showToast("No streams found", "error"); return; }
       const best = streams.reduce((a, b) => parseInt(a.resolutions) > parseInt(b.resolutions) ? a : b);
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(best.url)}&referer=${encodeURIComponent("https://moviebox.ph/")}`;
@@ -102,244 +375,60 @@ export default function App() {
     } catch { showToast("Could not load stream", "error"); }
   };
 
-  const startDownloadResolved = async (item, season, episode) => {
+  const startDownload = async (item, season = 1, episode = 1) => {
     const resolved = await resolveItem(item);
     if (!resolved) return;
-    startDownload(resolved, season, episode);
+    const key = `${resolved.detailPath}-s${season}e${episode}`;
+    setDownloading((d) => ({ ...d, [key]: { progress: 0, status: "starting" } }));
+    try {
+      await startDownloadApi({ detailPath: resolved.detailPath, subjectId: resolved.subjectId, title: resolved.title, season, episode });
+      setDownloading((d) => ({ ...d, [key]: { status: "done" } }));
+      showToast(`Download started: ${resolved.title}`, "success");
+      pollDownloads();
+    } catch {
+      setDownloading((d) => ({ ...d, [key]: { status: "error" } }));
+      showToast("Download failed", "error");
+    }
   };
 
-  const activeSearch = debouncedQuery.trim().length > 0;
+  const handleMobileTab = (id) => {
+    setMobileTab(id);
+    if (id === "home") { setActiveTab("Home"); setQuery(""); }
+    if (id === "search") setActiveTab("Home");
+    if (id === "downloads") setActiveTab("Downloads");
+  };
+
+  const renderContent = () => {
+    if (isSearching) return <SearchResults results={searchResults} query={debouncedQuery || query} onPlay={playStream} onSelect={setSelected} downloading={downloading} />;
+    if (showMyList) return (
+      <div className="downloads">
+        <h2 className="section-heading">My List</h2>
+        {!myList.length
+          ? <div className="empty-state"><div className="empty-state__icon">📋</div><p>Nothing saved yet.</p></div>
+          : <div className="search-grid">{myList.map((item, i) => <div key={i} className="search-card" onClick={() => setSelected(item)}>{item.cover && <img src={item.cover} alt={item.title} className="search-card__img" />}<div className="search-card__body"><h3 className="search-card__title">{item.title}</h3><div className="search-card__actions"><button className="btn-play-sm" onClick={(e) => { e.stopPropagation(); playStream(item); }}><Icon.Play /> Watch</button></div></div></div>)}</div>
+        }
+      </div>
+    );
+    if (showDownloads) return <Downloads files={downloads} onPlay={setPlayer} />;
+    const catOrder = activeTab === "Home" ? CATEGORIES : [activeTab];
+    return (
+      <>
+        {activeTab === "Home" && <Hero item={hero} onPlay={playStream} onSelect={setSelected} />}
+        <div className="carousels">
+          {catOrder.map((cat) => categories[cat]?.length ? <Carousel key={cat} title={cat} items={categories[cat]} onSelect={setSelected} onPlay={playStream} /> : null)}
+        </div>
+      </>
+    );
+  };
 
   return (
-    <div style={{ background: "#0a0a0f", minHeight: "100vh", color: "#fff", fontFamily: "'Inter', sans-serif" }}>
-
-      {/* Navbar */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: "linear-gradient(to bottom, rgba(10,10,15,0.98), transparent)", padding: "16px 40px", display: "flex", alignItems: "center", gap: 32 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#e50914", letterSpacing: -1 }}>🐦 MAGPIE</div>
-        <div style={{ display: "flex", gap: 24 }}>
-          {TABS.map(t => (
-            <button key={t} onClick={() => { setTab(t); setQuery(""); setSearchResults([]); }}
-              style={{ background: "none", border: "none", color: tab === t ? "#fff" : "#aaa", fontWeight: tab === t ? 700 : 400, fontSize: 14, cursor: "pointer", borderBottom: tab === t ? "2px solid #e50914" : "2px solid transparent", paddingBottom: 4 }}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <div style={{ marginLeft: "auto", position: "relative" }}>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search to download..."
-            style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "8px 16px", color: "#fff", width: 280, fontSize: 14, outline: "none" }} />
-          {query && <button onClick={() => { setQuery(""); setSearchResults([]); }}
-            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 16 }}>✕</button>}
-        </div>
-      </nav>
-
-      {/* Hero */}
-      {!activeSearch && hero && tab !== "Downloads" && (
-        <div style={{ position: "relative", height: 520, marginTop: 0, overflow: "hidden" }}>
-          <img src={IMG(hero.backdrop_path, "original")} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,15,0.95) 40%, transparent), linear-gradient(to top, rgba(10,10,15,1) 0%, transparent 50%)" }} />
-          <div style={{ position: "absolute", bottom: 80, left: 60, maxWidth: 500 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#e50914", fontWeight: 700, marginBottom: 8, textTransform: "uppercase" }}>
-              {hero.media_type === "tv" ? "TV Series" : "Movie"} · {(hero.release_date || hero.first_air_date || "").slice(0, 4)}
-            </div>
-            <h1 style={{ fontSize: 44, fontWeight: 900, margin: "0 0 12px", lineHeight: 1.1 }}>{hero.title || hero.name}</h1>
-            <p style={{ fontSize: 15, color: "#ccc", lineHeight: 1.6, marginBottom: 24 }}>{(hero.overview || "").slice(0, 180)}...</p>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => playStream({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name, _fromTMDB: true })}
-                style={{ background: "#e50914", border: "none", color: "#fff", padding: "12px 28px", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-                ▶ Watch Now
-              </button>
-              <button onClick={() => setSelected({ detailPath: hero.title || hero.name, subjectId: hero.id, title: hero.title || hero.name, cover: IMG(hero.poster_path), _fromTMDB: true })}
-                style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "12px 28px", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-                + Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ padding: "0 40px 40px", marginTop: activeSearch || tab === "Downloads" ? 80 : 0 }}>
-
-        {/* Search Results */}
-        {activeSearch && (
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: "#aaa" }}>
-              Results for <span style={{ color: "#fff" }}>"{query}"</span>
-            </h2>
-            {searchResults.length === 0 ? (
-              <p style={{ color: "#666" }}>No results yet...</p>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
-                {searchResults.map((item, i) => (
-                  <SearchCard key={i} item={item} onSelect={setSelected} onPlay={playStream} onDownload={startDownload} downloading={downloading} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Downloads Tab */}
-        {!activeSearch && tab === "Downloads" && (
-          <div>
-            <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>Downloads</h2>
-            {downloads.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 80, color: "#444" }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📂</div>
-                <p>No downloads yet. Search for a movie or show to get started.</p>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-                {downloads.map((f, i) => (
-                  <div key={i} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 20, display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ fontSize: 32 }}>🎬</div>
-                    <div style={{ flex: 1, overflow: "hidden" }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
-                      <div style={{ color: "#666", fontSize: 12, marginTop: 4 }}>{f.size_mb} MB</div>
-                    </div>
-                    <button onClick={() => setPlayer({ url: `/api/files/${f.name}`, title: f.name })}
-                      style={{ background: "#e50914", border: "none", color: "#fff", padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>▶</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Content Grid */}
-        {!activeSearch && tab !== "Downloads" && (
-          <div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, margin: "32px 0 20px" }}>{tab}</h2>
-            {loading ? (
-              <div style={{ display: "flex", justifyContent: "center", padding: 80 }}>
-                <div style={{ width: 40, height: 40, border: "3px solid #333", borderTop: "3px solid #e50914", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
-                {items.map((item, i) => (
-                  <TMDBCard key={i} item={item} onSelect={setSelected} onPlay={playStream} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Download Modal */}
-      {selected && (
-        <Modal title={selected.title} cover={selected.cover} onClose={() => setSelected(null)}>
-          <DownloadForm item={selected} onDownload={(s, e) => { startDownloadResolved(selected, s, e); setSelected(null); }} onPlay={(s, e) => { playStream(selected, s, e); setSelected(null); }} />
-        </Modal>
-      )}
-
-      {/* Video Player */}
-      {player && (
-        <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 200, display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", alignItems: "center", padding: "12px 20px", background: "rgba(0,0,0,0.8)" }}>
-            <button onClick={() => setPlayer(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", marginRight: 16 }}>✕</button>
-            <span style={{ fontWeight: 700 }}>{player.title}</span>
-            {player.season && <span style={{ color: "#aaa", marginLeft: 12, fontSize: 14 }}>S{player.season}E{player.episode}</span>}
-          </div>
-          <video src={player.url} controls autoPlay style={{ flex: 1, width: "100%", background: "#000" }} />
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div style={{ position: "fixed", bottom: 30, right: 30, background: toast.type === "error" ? "#c0392b" : toast.type === "success" ? "#27ae60" : "#2c3e50", color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 14, zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }}>
-          {toast.msg}
-        </div>
-      )}
-
-      <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #111; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-      `}</style>
-    </div>
-  );
-}
-
-function TMDBCard({ item, onSelect, onPlay }) {
-  const [hover, setHover] = useState(false);
-  const title = item.title || item.name;
-  const year = (item.release_date || item.first_air_date || "").slice(0, 4);
-  const poster = IMG(item.poster_path);
-  return (
-    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", transition: "transform 0.2s", transform: hover ? "scale(1.05)" : "scale(1)", background: "#111" }}>
-      {poster ? <img src={poster} alt={title} style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", aspectRatio: "2/3", background: "#222", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>🎬</div>}
-      {hover && (
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, textAlign: "center", marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 11, color: "#aaa" }}>{year} · ⭐ {item.vote_average?.toFixed(1)}</div>
-          <button onClick={() => onPlay({ detailPath: title, subjectId: item.id, title, _fromTMDB: true })}
-            style={{ background: "#e50914", border: "none", color: "#fff", padding: "7px 18px", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", width: "100%" }}>▶ Watch</button>
-          <button onClick={() => onSelect({ detailPath: title, subjectId: item.id, title, cover: IMG(item.poster_path), _fromTMDB: true })}
-            style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "7px 18px", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", width: "100%" }}>⬇ Download</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SearchCard({ item, onSelect, onPlay, onDownload, downloading }) {
-  const key = `${item.detailPath}-s1e1`;
-  const status = downloading[key];
-  return (
-    <div style={{ borderRadius: 10, overflow: "hidden", background: "#111", cursor: "pointer" }}>
-      {item.cover ? <img src={item.cover} alt={item.title} style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", aspectRatio: "2/3", background: "#222", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>🎬</div>}
-      <div style={{ padding: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>{item.year} · {item.genre} {item.hasResource ? "✓" : ""}</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => onPlay(item)} style={{ flex: 1, background: "#e50914", border: "none", color: "#fff", padding: "6px 0", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>▶</button>
-          <button onClick={() => onSelect(item)} style={{ flex: 1, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "6px 0", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            {status?.status === "done" ? "✓" : status?.status === "starting" ? "..." : "⬇"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Modal({ title, cover, onClose, children }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 150, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#141414", borderRadius: 16, width: "100%", maxWidth: 500, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }}>
-        {cover && <img src={cover} alt={title} style={{ width: "100%", maxHeight: 250, objectFit: "cover" }} />}
-        <div style={{ padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 800 }}>{title}</h2>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "#aaa", fontSize: 20, cursor: "pointer" }}>✕</button>
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DownloadForm({ item, onDownload, onPlay }) {
-  const [season, setSeason] = useState(1);
-  const [episode, setEpisode] = useState(1);
-  const input = (label, val, set) => (
-    <div style={{ flex: 1 }}>
-      <label style={{ display: "block", fontSize: 12, color: "#aaa", marginBottom: 6 }}>{label}</label>
-      <input type="number" min={1} value={val} onChange={e => set(parseInt(e.target.value) || 1)}
-        style={{ width: "100%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 14, outline: "none" }} />
-    </div>
-  );
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        {input("Season", season, setSeason)}
-        {input("Episode", episode, setEpisode)}
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={() => onPlay(season, episode)}
-          style={{ flex: 1, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", padding: "12px 0", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>▶ Watch</button>
-        <button onClick={() => onDownload(season, episode)}
-          style={{ flex: 1, background: "#e50914", border: "none", color: "#fff", padding: "12px 0", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>⬇ Download</button>
-      </div>
+    <div className="app">
+      <TopNav activeTab={activeTab} onTabChange={(t) => { setActiveTab(t); setQuery(""); setMobileTab("home"); }} query={query} onQuery={setQuery} />
+      <main className="main-content">{renderContent()}</main>
+      <BottomNav active={mobileTab} onChange={handleMobileTab} />
+      {selected && <DetailModal item={selected} onClose={() => setSelected(null)} onPlay={playStream} onDownload={startDownload} />}
+      {player && <VideoPlayer player={player} onClose={() => setPlayer(null)} />}
+      <Toast toast={toast} />
     </div>
   );
 }
